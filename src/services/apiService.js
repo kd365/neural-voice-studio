@@ -3,12 +3,19 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const MAX_CALLS = 3;
 const STORAGE_KEY = 'nvs_usage_count';
 
+function isUnlimited() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('unlimited') === 'true';
+}
+
 export function getRemainingCalls() {
+  if (isUnlimited()) return Infinity;
   const used = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
   return MAX_CALLS - used;
 }
 
 function incrementUsage() {
+  if (isUnlimited()) return;
   const used = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
   localStorage.setItem(STORAGE_KEY, String(used + 1));
 }
