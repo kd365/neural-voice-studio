@@ -5,7 +5,7 @@ const STORAGE_KEY = 'nvs_usage_count';
 
 function isUnlimited() {
   const params = new URLSearchParams(window.location.search);
-  return params.get('unlimited') === 'true';
+  return params.get('key') === 'UsageMetricsRock3567!';
 }
 
 export function getRemainingCalls() {
