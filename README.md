@@ -1,41 +1,76 @@
 # Neural Voice Studio
 
-A full-stack text-to-speech web application built with React, Flask, and AWS Polly. Users enter text, select from six neural voices, and generate natural-sounding audio with playback and download capabilities.
+A full-stack text-to-speech web application built with React and AWS Polly. Users enter text, select from six neural voices, and generate natural-sounding audio with playback and download capabilities.
+
+## Live Demo
+
+**[https://kd365.github.io/neural-voice-studio/](https://kd365.github.io/neural-voice-studio/)**
+
+The live demo is limited to 3 generations per visitor to manage AWS costs.
 
 ## Architecture
 
+### Production (Deployed)
+
 ```
-┌─────────────────────────────┐
-│   React Frontend (:3000)    │
-│   Vite + Lucide Icons       │
-│   Audio Blob / Object URL   │
-└──────────┬──────────────────┘
+┌──────────────────────────────┐
+│  GitHub Pages                │
+│  React Frontend (static)     │
+│  Rate Limiting (localStorage)│
+└──────────┬───────────────────┘
            │ POST /api/generate
            ▼
-┌─────────────────────────────┐
-│   Flask Backend (:5001)     │
-│   boto3 Polly Client        │
-│   Base64 Encoding           │
-└──────────┬──────────────────┘
+┌──────────────────────────────┐
+│  API Gateway (us-east-1)     │
+│  REST API + CORS             │
+└──────────┬───────────────────┘
+           │ Lambda Proxy
+           ▼
+┌──────────────────────────────┐
+│  AWS Lambda (Python 3.11)    │
+│  boto3 Polly Client          │
+│  Base64 Encoding             │
+└──────────┬───────────────────┘
            │ synthesize_speech()
            ▼
-┌─────────────────────────────┐
-│   AWS Polly (us-east-1)     │
-│   Neural TTS Engine         │
-│   MP3 Output Stream         │
-└─────────────────────────────┘
+┌──────────────────────────────┐
+│  AWS Polly (us-east-1)       │
+│  Neural TTS Engine           │
+│  MP3 Output Stream           │
+└──────────────────────────────┘
 ```
 
-Both services are orchestrated with Docker Compose, with container networking handling service discovery.
+### Local Development
+
+```
+┌──────────────────────────────┐
+│  React Frontend (:3000)      │
+│  Vite Dev Server             │
+└──────────┬───────────────────┘
+           │ POST /api/generate
+           ▼
+┌──────────────────────────────┐
+│  Flask Backend (:5000)       │
+│  boto3 Polly Client          │
+└──────────┬───────────────────┘
+           │ synthesize_speech()
+           ▼
+┌──────────────────────────────┐
+│  AWS Polly (us-east-1)       │
+└──────────────────────────────┘
+```
 
 ## Technology Stack
 
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 19, Vite, Lucide icons |
-| **Backend** | Flask 3.0, boto3 |
+| **Backend (local)** | Flask 3.0, boto3 |
+| **Backend (prod)** | AWS Lambda, API Gateway |
 | **Cloud** | AWS Polly (neural TTS, us-east-1) |
-| **Containers** | Docker Compose (frontend + backend) |
+| **Hosting** | GitHub Pages (frontend), AWS Lambda (backend) |
+| **CI/CD** | GitHub Actions (build + deploy to Pages) |
+| **Containers** | Docker Compose (local development) |
 
 ## Features
 
@@ -43,17 +78,23 @@ Both services are orchestrated with Docker Compose, with container networking ha
 - **Audio Player** — Play/pause, progress bar, elapsed/total time display
 - **MP3 Download** — Save generated audio files with timestamped filenames
 - **Input Validation** — Character counter (3,000 max), empty-text rejection, error messaging
-- **Health Endpoint** — `/health` for container orchestration and liveness probes
-- **Multi-Stage Docker Build** — Node 22 build stage → Nginx Alpine production image
+- **Rate Limiting** — 3 generations per visitor via localStorage to control AWS Polly costs
+- **Serverless Backend** — Lambda + API Gateway for zero idle cost
+- **Multi-Stage Docker Build** — Node 22 build stage → Nginx Alpine production image (local dev)
 
 ## How It Works
 
 1. User enters text (up to 3,000 characters) and selects a voice
-2. React frontend sends a POST to the Flask API (`/api/generate`)
-3. Flask calls `polly_client.synthesize_speech()` with the neural engine
-4. AWS Polly returns an MP3 audio stream
-5. Backend base64-encodes the audio and returns it as JSON
-6. Frontend decodes the blob, creates an Object URL, and streams playback
+2. React frontend checks localStorage rate limit (max 3 calls)
+3. Frontend sends POST to API Gateway → Lambda (`/api/generate`)
+4. Lambda calls `polly_client.synthesize_speech()` with the neural engine
+5. AWS Polly returns an MP3 audio stream
+6. Lambda base64-encodes the audio and returns it as JSON
+7. Frontend decodes the blob, creates an Object URL, and streams playback
+
+## Rate Limiting
+
+The live demo limits each visitor to **3 text-to-speech generations** to keep AWS Polly costs minimal. The counter is stored in the browser's localStorage and resets if cleared. This is a portfolio demonstration — the architecture supports unlimited usage in a production setting.
 
 ## Project Structure
 
@@ -66,15 +107,19 @@ neural-voice-studio/
 │   ├── components/
 │   │   └── AudioPlayer.jsx      # Audio playback UI
 │   ├── services/
-│   │   └── apiService.js        # API client, voice definitions
+│   │   └── apiService.js        # API client, rate limiting, voice definitions
 │   └── utils/
 │       └── audioUtils.js        # Audio blob, URL, download helpers
+├── lambda/
+│   └── lambda_function.py       # AWS Lambda handler (production backend)
 ├── backend/
-│   ├── app.py                   # Flask API (health, generate, voices)
+│   ├── app.py                   # Flask API (local development backend)
 │   ├── Dockerfile               # Python 3.11-slim
 │   └── requirements.txt         # Flask, Flask-CORS, boto3
+├── .github/workflows/
+│   └── deploy.yml               # GitHub Pages deployment workflow
 ├── Dockerfile                   # Frontend multi-stage (Node → Nginx)
-├── docker-compose.yml           # Service orchestration
+├── docker-compose.yml           # Local development orchestration
 ├── vite.config.js               # Vite configuration
 ├── package.json                 # Frontend dependencies
 └── index.html                   # HTML entry point
@@ -108,7 +153,7 @@ python app.py                    # Runs on http://localhost:5000
 
 # Frontend (separate terminal)
 npm install
-npm run dev                      # Runs on http://localhost:5173
+npm run dev                      # Runs on http://localhost:3000
 ```
 
 ### Docker Compose
