@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Volume2 } from "lucide-react";
 import AudioPlayer from "./components/AudioPlayer";
-import { generateSpeech, VOICES } from "./services/apiService";
+import { generateSpeech, getRemainingCalls, VOICES } from "./services/apiService";
 import { validateText } from "./utils/audioUtils";
 
 export default function App() {
@@ -10,6 +10,9 @@ export default function App() {
   const [audioData, setAudioData] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null);
+  const [remaining, setRemaining] = useState(getRemainingCalls());
+
+  const limitReached = remaining <= 0;
 
   const handleGenerate = async () => {
     const validation = validateText(text);
@@ -24,6 +27,7 @@ export default function App() {
     try {
       const audio = await generateSpeech(text, voiceId);
       setAudioData(audio);
+      setRemaining(getRemainingCalls());
     } catch (err) {
       setError(err.message);
       console.error("Generation failed:", err);
@@ -31,6 +35,8 @@ export default function App() {
       setIsGenerating(false);
     }
   };
+
+  const isDisabled = isGenerating || !text.trim() || limitReached;
 
   return (
     <div style={{ minHeight: "100vh", background: "#f5f7fa", display: "flex", flexDirection: "column" }}>
@@ -66,6 +72,7 @@ export default function App() {
               onChange={(e) => setText(e.target.value)}
               placeholder="Enter text to convert to speech..."
               rows={6}
+              disabled={limitReached}
               style={{
                 width: "100%",
                 padding: "1rem",
@@ -73,7 +80,8 @@ export default function App() {
                 borderRadius: "8px",
                 fontSize: "1rem",
                 fontFamily: "inherit",
-                resize: "vertical"
+                resize: "vertical",
+                opacity: limitReached ? 0.5 : 1,
               }}
             />
             <div style={{ fontSize: "0.875rem", color: "#6b7280", marginTop: "0.25rem" }}>
@@ -88,13 +96,15 @@ export default function App() {
             <select
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
+              disabled={limitReached}
               style={{
                 width: "100%",
                 padding: "0.75rem",
                 border: "2px solid #e5e7eb",
                 borderRadius: "8px",
                 fontSize: "1rem",
-                background: "white"
+                background: "white",
+                opacity: limitReached ? 0.5 : 1,
               }}
             >
               {VOICES.map(voice => (
@@ -120,10 +130,10 @@ export default function App() {
 
           <button
             onClick={handleGenerate}
-            disabled={isGenerating || !text.trim()}
+            disabled={isDisabled}
             style={{
               width: "100%",
-              background: isGenerating || !text.trim()
+              background: isDisabled
                 ? "#d1d5db"
                 : "linear-gradient(135deg, #667eea, #764ba2)",
               color: "white",
@@ -132,7 +142,7 @@ export default function App() {
               borderRadius: "8px",
               fontSize: "1rem",
               fontWeight: 600,
-              cursor: isGenerating || !text.trim() ? "not-allowed" : "pointer",
+              cursor: isDisabled ? "not-allowed" : "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -140,8 +150,19 @@ export default function App() {
             }}
           >
             <Volume2 size={20} />
-            {isGenerating ? "Generating..." : "Generate Speech"}
+            {isGenerating ? "Generating..." : limitReached ? "Demo Limit Reached" : "Generate Speech"}
           </button>
+
+          <div style={{
+            textAlign: "center",
+            marginTop: "0.5rem",
+            fontSize: "0.8rem",
+            color: limitReached ? "#dc2626" : "#6b7280"
+          }}>
+            {limitReached
+              ? "You\u2019ve used all 3 demo generations. This is a portfolio project with limited usage."
+              : `${remaining} of 3 demo generations remaining`}
+          </div>
 
           {audioData && <AudioPlayer audioData={audioData} voiceId={voiceId} />}
         </div>
@@ -154,7 +175,7 @@ export default function App() {
         textAlign: "center"
       }}>
         <p style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
-          Built with React, Flask &amp; AWS Polly
+          Built with React, AWS Lambda &amp; AWS Polly
           {" \u00b7 "}
           <a
             href="https://github.com/kd365/neural-voice-studio"

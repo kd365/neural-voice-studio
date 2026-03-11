@@ -1,6 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+const MAX_CALLS = 3;
+const STORAGE_KEY = 'nvs_usage_count';
+
+export function getRemainingCalls() {
+  const used = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+  return MAX_CALLS - used;
+}
+
+function incrementUsage() {
+  const used = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+  localStorage.setItem(STORAGE_KEY, String(used + 1));
+}
+
 export async function generateSpeech(text, voiceId = "Joanna") {
+  if (getRemainingCalls() <= 0) {
+    throw new Error('Demo limit reached (3 of 3 generations used). This is a portfolio demo with limited usage.');
+  }
+
   const response = await fetch(`${API_URL}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -20,6 +37,7 @@ export async function generateSpeech(text, voiceId = "Joanna") {
     bytes[i] = binaryString.charCodeAt(i);
   }
 
+  incrementUsage();
   return bytes;
 }
 
